@@ -28,5 +28,10 @@
   "pleaseSelectFields": "请选择URL字段和附件字段",
   "info": "提示",
   "noRecords": "没有找到记录",
-  "noProcessableRecords": "没有可处理的记录（所有记录都被跳过）"
+  "noProcessableRecords": "没有可处理的记录（所有记录都被跳过）",
+  "viewLogs": "查看处理日志",
+  "logs": "处理日志",
+  "clearLogs": "清空",
+  "hideLogs": "隐藏",
+  "noLogs": "暂无日志..."
 }

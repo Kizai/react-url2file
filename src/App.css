@@ -44,3 +44,32 @@
 .main a:hover {
   text-decoration: underline;
 }
+
+/* 日志容器样式 */
+.log-container {
+  scrollbar-width: thin;
+  scrollbar-color: #555 #1e1e1e;
+}
+
+.log-container::-webkit-scrollbar {
+  width: 8px;
+}
+
+.log-container::-webkit-scrollbar-track {
+  background: #1e1e1e;
+}
+
+.log-container::-webkit-scrollbar-thumb {
+  background: #555;
+  border-radius: 4px;
+}
+
+.log-container::-webkit-scrollbar-thumb:hover {
+  background: #777;
+}
+
+.log-container pre {
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  max-width: 100%;
+}

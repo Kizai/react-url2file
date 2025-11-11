@@ -28,5 +28,10 @@
   "pleaseSelectFields": "Please select URL field and attachment field",
   "info": "Info",
   "noRecords": "No records found",
-  "noProcessableRecords": "No processable records (all records were skipped)"
+  "noProcessableRecords": "No processable records (all records were skipped)",
+  "viewLogs": "View Logs",
+  "logs": "Processing Logs",
+  "clearLogs": "Clear",
+  "hideLogs": "Hide",
+  "noLogs": "No logs yet..."
 }

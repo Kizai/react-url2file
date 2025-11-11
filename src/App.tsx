@@ -1,12 +1,21 @@
 import './App.css';
 import { bitable, ITableMeta, IViewMeta, IFieldMeta, IAttachmentField, ITextField, FieldType } from "@lark-base-open/js-sdk";
-import { Button, Form, Input, Select, Checkbox, Typography, Notification, Spin } from '@douyinfe/semi-ui';
+import { Button, Form, Input, Select, Checkbox, Typography, Notification, Spin, Card, Collapse } from '@douyinfe/semi-ui';
 import { BaseFormApi } from '@douyinfe/semi-foundation/lib/es/form/interface';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { downloadFileFromUrl, isValidUrl, getFileNameFromUrl } from './utils/fileUtils';
 
 const { Title, Text } = Typography;
+
+// 日志类型
+interface LogEntry {
+  id: number;
+  timestamp: number;
+  level: 'info' | 'warn' | 'error' | 'success';
+  message: string;
+  data?: any;
+}
 
 interface FormValues {
   authCode: string;
@@ -26,7 +35,46 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [processing, setProcessing] = useState(false);
   const [progress, setProgress] = useState({ current: 0, total: 0, success: 0, failed: 0 });
+  const [logs, setLogs] = useState<LogEntry[]>([]);
+  const [showLogs, setShowLogs] = useState(false);
+  const logIdRef = useRef(0);
+  const logContainerRef = useRef<HTMLDivElement>(null);
   const formApi = useRef<BaseFormApi>();
+
+  // 日志记录函数
+  const addLog = useCallback((level: LogEntry['level'], message: string, data?: any) => {
+    const logEntry: LogEntry = {
+      id: logIdRef.current++,
+      timestamp: Date.now(),
+      level,
+      message,
+      data,
+    };
+    
+    // 同时输出到控制台
+    const consoleMethod = level === 'error' ? console.error : level === 'warn' ? console.warn : console.log;
+    if (data !== undefined) {
+      consoleMethod(`[${level.toUpperCase()}] ${message}`, data);
+    } else {
+      consoleMethod(`[${level.toUpperCase()}] ${message}`);
+    }
+    
+    // 添加到日志列表
+    setLogs(prev => [...prev, logEntry]);
+    
+    // 自动滚动到底部
+    setTimeout(() => {
+      if (logContainerRef.current) {
+        logContainerRef.current.scrollTop = logContainerRef.current.scrollHeight;
+      }
+    }, 100);
+  }, []);
+
+  // 清空日志
+  const clearLogs = useCallback(() => {
+    setLogs([]);
+    logIdRef.current = 0;
+  }, []);
 
   // 初始化：获取表格列表和当前选择
   useEffect(() => {
@@ -139,19 +187,33 @@ export default function App() {
   const handleConvert = useCallback(async (values: FormValues) => {
     const { tableId, viewId, urlFieldId, attachmentFieldId, overwrite } = values;
 
+    // 清空日志并显示日志窗口
+    clearLogs();
+    setShowLogs(true);
+    addLog('info', '开始处理URL转附件任务');
+
     // 验证必填字段
     if (!tableId) {
+      addLog('error', '错误：未选择数据表');
       Notification.warning({ title: t('error'), content: t('pleaseSelectTable') });
       return;
     }
     if (!viewId) {
+      addLog('error', '错误：未选择视图');
       Notification.warning({ title: t('error'), content: t('pleaseSelectView') });
       return;
     }
     if (!urlFieldId || !attachmentFieldId) {
+      addLog('error', '错误：未选择URL字段或附件字段');
       Notification.warning({ title: t('error'), content: t('pleaseSelectFields') });
       return;
     }
+
+    addLog('info', `数据表ID: ${tableId}`);
+    addLog('info', `视图ID: ${viewId}`);
+    addLog('info', `URL字段ID: ${urlFieldId}`);
+    addLog('info', `附件字段ID: ${attachmentFieldId}`);
+    addLog('info', `覆盖模式: ${overwrite ? '是' : '否'}`);
 
     setProcessing(true);
     setProgress({ current: 0, total: 0, success: 0, failed: 0 });
@@ -175,24 +237,25 @@ export default function App() {
       let failedCount = 0;
       let skippedCount = 0;
 
-      console.log(`开始处理 ${total} 条记录`);
+      addLog('info', `开始处理 ${total} 条记录`);
 
       // 遍历每条记录
       for (let i = 0; i < recordIds.length; i++) {
         const recordId = recordIds[i];
         if (!recordId) {
-          console.warn(`记录ID为空，跳过`);
+          addLog('warn', `记录 ${i + 1}: 记录ID为空，跳过`);
           skippedCount++;
           continue;
         }
         
         setProgress(prev => ({ ...prev, current: i + 1 }));
-        console.log(`处理第 ${i + 1}/${total} 条记录: ${recordId}`);
+        addLog('info', `\n=== 处理第 ${i + 1}/${total} 条记录 ===`);
+        addLog('info', `记录ID: ${recordId}`);
 
         try {
           // 获取URL字段的值
           const urlValue = await table.getCellValue(urlFieldId, recordId);
-          console.log(`URL字段值:`, urlValue);
+          addLog('info', `URL字段原始值:`, urlValue);
           
           let url: string | null = null;
 
@@ -203,48 +266,51 @@ export default function App() {
             if (typeof urlValue === 'string') {
               // 纯字符串类型
               url = urlValue;
+              addLog('info', `URL类型: 字符串, 值: ${url}`);
             } else if (Array.isArray(urlValue) && urlValue.length > 0) {
               // 数组类型（ISegmentItem[]），Url字段和Text字段都可能是这种格式
               const firstItem = urlValue[0];
+              addLog('info', `URL类型: 数组, 第一项:`, firstItem);
               if (firstItem && typeof firstItem === 'object') {
                 // 优先使用link属性（Url字段），如果没有则使用text属性（Text字段）
                 url = (firstItem as any).link || (firstItem as any).text || null;
-                console.log(`从数组提取URL:`, url, `link:`, (firstItem as any).link, `text:`, (firstItem as any).text);
+                addLog('info', `从数组提取URL - link: ${(firstItem as any).link}, text: ${(firstItem as any).text}, 最终URL: ${url}`);
               } else if (typeof firstItem === 'string') {
                 url = firstItem;
+                addLog('info', `从数组提取URL (字符串): ${url}`);
               }
             } else if (urlValue && typeof urlValue === 'object') {
               // 单个对象
               // 优先使用link属性（Url字段），如果没有则使用text属性
               url = (urlValue as any).link || (urlValue as any).text || null;
-              console.log(`从对象提取URL:`, url);
+              addLog('info', `从对象提取URL，最终URL: ${url}`, urlValue);
             }
           }
 
           // 如果URL为空，跳过
           if (!url || typeof url !== 'string' || !url.trim()) {
-            console.warn(`记录 ${recordId} URL为空，跳过`);
+            addLog('warn', `URL为空或无效，跳过该记录`);
             skippedCount++;
             continue;
           }
 
           const trimmedUrl = url.trim();
-          console.log(`提取的URL: ${trimmedUrl}`);
+          addLog('info', `提取的URL: ${trimmedUrl}`);
 
           // 验证URL
           if (!isValidUrl(trimmedUrl)) {
-            console.warn(`记录 ${recordId} URL无效: ${trimmedUrl}`);
+            addLog('error', `URL格式无效: ${trimmedUrl}`);
             failedCount++;
             continue;
           }
 
           // 获取当前附件字段的值
           const currentAttachments = await table.getCellValue(attachmentFieldId, recordId);
-          console.log(`当前附件:`, currentAttachments);
+          addLog('info', `当前附件字段值:`, currentAttachments);
           
           // 如果已有附件且不覆盖，跳过
           if (!overwrite && currentAttachments && Array.isArray(currentAttachments) && currentAttachments.length > 0) {
-            console.log(`记录 ${recordId} 已有附件且不覆盖，跳过`);
+            addLog('info', `已有 ${currentAttachments.length} 个附件且不覆盖，跳过`);
             skippedCount++;
             continue;
           }
@@ -252,11 +318,11 @@ export default function App() {
           // 下载文件
           let blob: Blob;
           try {
-            console.log(`开始下载文件: ${trimmedUrl}`);
+            addLog('info', `开始下载文件: ${trimmedUrl}`);
             blob = await downloadFileFromUrl(trimmedUrl);
-            console.log(`文件下载成功，大小: ${blob.size} bytes, 类型: ${blob.type}`);
-          } catch (error) {
-            console.error(`记录 ${recordId} 下载文件失败:`, error);
+            addLog('success', `文件下载成功 - 大小: ${(blob.size / 1024).toFixed(2)} KB, 类型: ${blob.type || 'unknown'}`);
+          } catch (error: any) {
+            addLog('error', `下载文件失败: ${error?.message || String(error)}`, error);
             failedCount++;
             continue;
           }
@@ -265,26 +331,27 @@ export default function App() {
           try {
             // 获取文件名
             const fileName = getFileNameFromUrl(trimmedUrl) || 'file';
-            console.log(`文件名: ${fileName}`);
+            addLog('info', `文件名: ${fileName}`);
             
             // 将Blob转换为File对象
             const file = new File([blob], fileName, { type: blob.type || 'application/octet-stream' });
-            console.log(`File对象创建成功:`, { name: file.name, size: file.size, type: file.type });
+            addLog('info', `File对象创建成功 - name: ${file.name}, size: ${file.size}, type: ${file.type}`);
             
             // 获取附件字段实例
             const attachmentField = await table.getFieldById(attachmentFieldId) as IAttachmentField;
-            console.log(`附件字段获取成功:`, attachmentFieldId);
+            addLog('info', `附件字段实例获取成功`);
             
-            // 方法1: 使用batchUploadFile上传文件，然后设置附件值
-            console.log(`开始上传文件到飞书...`);
+            // 使用batchUploadFile上传文件，然后设置附件值
+            addLog('info', `开始上传文件到飞书...`);
             const fileTokens = await bitable.base.batchUploadFile([file]);
-            console.log(`文件上传成功，tokens:`, fileTokens);
+            addLog('info', `文件上传API调用完成，返回tokens:`, fileTokens);
             
             if (!fileTokens || fileTokens.length === 0) {
               throw new Error('文件上传失败，未返回token');
             }
             
             const fileToken = fileTokens[0];
+            addLog('success', `文件上传成功，token: ${fileToken}`);
             
             // 构建附件对象（根据IOpenAttachment类型定义）
             // IOpenAttachment需要: token, name, size, type, timeStamp
@@ -295,14 +362,14 @@ export default function App() {
               type: blob.type || 'application/octet-stream',
               timeStamp: Date.now(), // 添加时间戳
             };
-            console.log(`附件对象:`, attachmentItem);
+            addLog('info', `附件对象构建完成:`, attachmentItem);
 
             // 准备要设置的附件数组
             let attachmentsToSet: any[];
             if (overwrite || !currentAttachments || !Array.isArray(currentAttachments) || currentAttachments.length === 0) {
               // 覆盖或为空时，设置为新附件
               attachmentsToSet = [attachmentItem];
-              console.log(`使用覆盖模式，设置新附件`);
+              addLog('info', `使用覆盖模式，设置新附件`);
             } else {
               // 追加附件（保留原有附件）
               // 确保现有附件对象格式正确
@@ -320,22 +387,25 @@ export default function App() {
                 return att;
               });
               attachmentsToSet = [...normalizedExisting, attachmentItem];
-              console.log(`使用追加模式，保留 ${normalizedExisting.length} 个现有附件，添加新附件`);
+              addLog('info', `使用追加模式，保留 ${normalizedExisting.length} 个现有附件，添加新附件`);
             }
             
-            console.log(`准备设置附件字段值（共 ${attachmentsToSet.length} 个附件）:`, attachmentsToSet);
+            addLog('info', `准备设置附件字段值（共 ${attachmentsToSet.length} 个附件）`, attachmentsToSet);
             
             // 使用setCellValue设置附件字段的值
             try {
+              addLog('info', `调用 setCellValue API...`);
               const setResult = await table.setCellValue(attachmentFieldId, recordId, attachmentsToSet);
-              console.log(`设置附件字段API调用完成，返回值:`, setResult);
+              addLog('info', `setCellValue API调用完成，返回值: ${setResult}`);
               
               // 短暂等待，让服务器处理
+              addLog('info', `等待1秒让服务器处理...`);
               await new Promise(resolve => setTimeout(resolve, 1000));
               
               // 验证设置是否成功 - 重新读取附件字段值
+              addLog('info', `验证附件字段值...`);
               const verifyAttachments = await table.getCellValue(attachmentFieldId, recordId);
-              console.log(`验证附件字段值:`, verifyAttachments);
+              addLog('info', `验证读取的附件字段值:`, verifyAttachments);
               
               // 检查是否设置成功
               if (verifyAttachments && Array.isArray(verifyAttachments)) {
@@ -346,7 +416,7 @@ export default function App() {
                 
                 if (hasNewAttachment) {
                   successCount++;
-                  console.log(`✓ 记录 ${recordId} 处理成功，附件已确认设置`);
+                  addLog('success', `✓ 处理成功！附件已确认设置到字段中`);
                 } else if (verifyAttachments.length > 0) {
                   // 如果附件列表不为空，但找不到新附件，可能是token不匹配
                   // 检查是否有新添加的附件（通过数量判断）
@@ -356,30 +426,29 @@ export default function App() {
                   const expectedCount = overwrite ? 1 : existingCount + 1;
                   if (verifyAttachments.length >= expectedCount) {
                     successCount++;
-                    console.log(`✓ 记录 ${recordId} 处理成功，附件数量正确（${verifyAttachments.length}个）`);
+                    addLog('success', `✓ 处理成功！附件数量正确（${verifyAttachments.length}个，期望${expectedCount}个）`);
                   } else {
-                    console.warn(`⚠ 记录 ${recordId} 附件数量不匹配，期望 ${expectedCount}，实际 ${verifyAttachments.length}`);
+                    addLog('error', `⚠ 附件数量不匹配 - 期望: ${expectedCount}, 实际: ${verifyAttachments.length}`, verifyAttachments);
                     failedCount++;
                   }
                 } else {
-                  console.warn(`⚠ 记录 ${recordId} 附件字段为空，设置可能失败`);
+                  addLog('error', `⚠ 附件字段为空，设置可能失败`);
                   failedCount++;
                 }
               } else {
                 // 如果验证返回null或非数组，可能是字段为空（新设置）
                 // 但在覆盖模式下，应该至少有一个附件
                 if (overwrite) {
-                  console.warn(`⚠ 记录 ${recordId} 覆盖模式但附件字段为空`);
+                  addLog('error', `⚠ 覆盖模式但附件字段为空，设置可能失败`);
                   failedCount++;
                 } else {
                   // 追加模式，如果验证失败，但API调用成功，仍然认为可能成功
-                  console.log(`⚠ 记录 ${recordId} 无法验证，但API调用未报错，标记为成功`);
+                  addLog('warn', `⚠ 无法验证附件，但API调用未报错，标记为成功`);
                   successCount++;
                 }
               }
             } catch (setError: any) {
-              console.error(`❌ 记录 ${recordId} 设置附件字段时抛出异常:`, setError);
-              console.error(`异常详情:`, {
+              addLog('error', `❌ 设置附件字段时抛出异常: ${setError?.message || String(setError)}`, {
                 message: setError?.message,
                 name: setError?.name,
                 stack: setError?.stack,
@@ -387,21 +456,24 @@ export default function App() {
               failedCount++;
             }
           } catch (error: any) {
-            console.error(`记录 ${recordId} 上传附件失败:`, error);
-            console.error(`错误详情:`, {
+            addLog('error', `上传附件失败: ${error?.message || String(error)}`, {
               message: error?.message,
               stack: error?.stack,
               name: error?.name,
             });
             failedCount++;
           }
-        } catch (error) {
-          console.error(`记录 ${recordId} 处理出错:`, error);
+        } catch (error: any) {
+          addLog('error', `处理记录时出错: ${error?.message || String(error)}`, error);
           failedCount++;
         }
       }
 
-      console.log(`处理完成: 成功 ${successCount}, 失败 ${failedCount}, 跳过 ${skippedCount}`);
+      addLog('info', `\n=== 处理完成 ===`);
+      addLog('success', `成功: ${successCount} 条`);
+      addLog('error', `失败: ${failedCount} 条`);
+      addLog('info', `跳过: ${skippedCount} 条`);
+      addLog('info', `总计: ${total} 条`);
 
       setProgress(prev => ({ ...prev, success: successCount, failed: failedCount }));
       
@@ -427,13 +499,13 @@ export default function App() {
           duration: 3,
         });
       }
-    } catch (error) {
-      console.error('Convert error:', error);
+    } catch (error: any) {
+      addLog('error', `处理过程中发生错误: ${error?.message || String(error)}`, error);
       Notification.error({ title: t('error'), content: String(error) });
     } finally {
       setProcessing(false);
     }
-  }, [t]);
+  }, [t, addLog, clearLogs]);
 
   // 表单提交处理
   const handleSubmit = useCallback(async (values: FormValues) => {
@@ -563,6 +635,111 @@ export default function App() {
           {t('confirm')}
         </Button>
       </Form>
+
+      {/* 日志窗口 */}
+      {showLogs && (
+        <Card
+          style={{ marginTop: '24px' }}
+          title={
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span>{t('logs')}</span>
+              <div>
+                <Button
+                  size="small"
+                  theme="borderless"
+                  type="tertiary"
+                  onClick={clearLogs}
+                  style={{ marginRight: '8px' }}
+                >
+                  {t('clearLogs')}
+                </Button>
+                <Button
+                  size="small"
+                  theme="borderless"
+                  type="tertiary"
+                  onClick={() => setShowLogs(false)}
+                >
+                  {t('hideLogs')}
+                </Button>
+              </div>
+            </div>
+          }
+        >
+          <div
+            ref={logContainerRef}
+            className="log-container"
+            style={{
+              maxHeight: '400px',
+              overflowY: 'auto',
+              fontFamily: 'monospace',
+              fontSize: '12px',
+              lineHeight: '1.6',
+              padding: '12px',
+              backgroundColor: '#1e1e1e',
+              color: '#d4d4d4',
+              borderRadius: '4px',
+            }}
+          >
+            {logs.length === 0 ? (
+              <div style={{ color: '#888' }}>{t('noLogs')}</div>
+            ) : (
+              logs.map((log) => {
+                const time = new Date(log.timestamp).toLocaleTimeString();
+                const levelColor = 
+                  log.level === 'error' ? '#f48771' :
+                  log.level === 'warn' ? '#dcdcaa' :
+                  log.level === 'success' ? '#4ec9b0' :
+                  '#569cd6';
+                
+                return (
+                  <div
+                    key={log.id}
+                    style={{
+                      marginBottom: '4px',
+                      padding: '2px 0',
+                      borderLeft: `3px solid ${levelColor}`,
+                      paddingLeft: '8px',
+                    }}
+                  >
+                    <span style={{ color: '#808080' }}>[{time}]</span>{' '}
+                    <span style={{ color: levelColor, fontWeight: 'bold' }}>
+                      [{log.level.toUpperCase()}]
+                    </span>{' '}
+                    <span style={{ color: '#d4d4d4' }}>{log.message}</span>
+                    {log.data !== undefined && (
+                      <pre
+                        style={{
+                          margin: '4px 0 0 0',
+                          padding: '8px',
+                          backgroundColor: '#252526',
+                          borderRadius: '4px',
+                          overflow: 'auto',
+                          fontSize: '11px',
+                          color: '#ce9178',
+                        }}
+                      >
+                        {typeof log.data === 'object' ? JSON.stringify(log.data, null, 2) : String(log.data)}
+                      </pre>
+                    )}
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </Card>
+      )}
+
+      {/* 如果没有日志但处理中，显示一个简单的日志入口 */}
+      {!showLogs && processing && (
+        <Button
+          theme="borderless"
+          type="tertiary"
+          onClick={() => setShowLogs(true)}
+          style={{ marginTop: '16px', width: '100%' }}
+        >
+          {t('viewLogs')}
+        </Button>
+      )}
     </main>
   );
 }
