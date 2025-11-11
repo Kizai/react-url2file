@@ -1,6 +1,6 @@
 import './App.css';
 import { bitable, ITableMeta, IViewMeta, IFieldMeta, IAttachmentField, ITextField, FieldType } from "@lark-base-open/js-sdk";
-import { Button, Form, Input, Select, Checkbox, Typography, Notification, Spin, Card, Collapse } from '@douyinfe/semi-ui';
+import { Button, Form, Input, Select, Checkbox, Typography, Notification, Spin, Card, Collapse, Progress } from '@douyinfe/semi-ui';
 import { BaseFormApi } from '@douyinfe/semi-foundation/lib/es/form/interface';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -238,6 +238,7 @@ export default function App() {
       let skippedCount = 0;
 
       addLog('info', `开始处理 ${total} 条记录`);
+      setProgress(prev => ({ ...prev, current: 0, success: 0, failed: 0 }));
 
       // 遍历每条记录
       for (let i = 0; i < recordIds.length; i++) {
@@ -245,11 +246,13 @@ export default function App() {
         if (!recordId) {
           addLog('warn', `记录 ${i + 1}: 记录ID为空，跳过`);
           skippedCount++;
+          setProgress(prev => ({ ...prev, current: i + 1 }));
           continue;
         }
         
-        setProgress(prev => ({ ...prev, current: i + 1 }));
-        addLog('info', `\n=== 处理第 ${i + 1}/${total} 条记录 ===`);
+        const currentIndex = i + 1;
+        setProgress(prev => ({ ...prev, current: currentIndex }));
+        addLog('info', `\n=== 处理第 ${currentIndex}/${total} 条记录 ===`);
         addLog('info', `记录ID: ${recordId}`);
 
         try {
@@ -341,6 +344,7 @@ export default function App() {
               addLog('error', `目标服务器返回错误（可能是服务器问题，不是CORS问题）`);
               addLog('error', `如果目标服务器返回500错误，说明文件服务器有问题，无法下载`);
               failedCount++;
+              setProgress(prev => ({ ...prev, failed: failedCount }));
               continue;
             } else if (errorMsg.includes('CORS') || errorMsg.includes('代理')) {
               addLog('info', `CORS或代理问题，尝试直接下载（可能仍然失败）`);
@@ -350,10 +354,12 @@ export default function App() {
               } catch (directError: any) {
                 addLog('error', `直接下载也失败: ${directError?.message || String(directError)}`);
                 failedCount++;
+                setProgress(prev => ({ ...prev, failed: failedCount }));
                 continue;
               }
             } else {
               failedCount++;
+              setProgress(prev => ({ ...prev, failed: failedCount }));
               continue;
             }
           }
@@ -454,6 +460,7 @@ export default function App() {
                 
                 if (hasNewAttachment) {
                   successCount++;
+                  setProgress(prev => ({ ...prev, success: successCount }));
                   addLog('success', `✓ 处理成功！附件已确认设置到字段中`);
                 } else if (verifyAttachments.length > 0) {
                   // 如果附件列表不为空，但找不到新附件，可能是token不匹配
@@ -464,14 +471,17 @@ export default function App() {
                   const expectedCount = overwrite ? 1 : existingCount + 1;
                   if (verifyAttachments.length >= expectedCount) {
                     successCount++;
+                    setProgress(prev => ({ ...prev, success: successCount }));
                     addLog('success', `✓ 处理成功！附件数量正确（${verifyAttachments.length}个，期望${expectedCount}个）`);
                   } else {
                     addLog('error', `⚠ 附件数量不匹配 - 期望: ${expectedCount}, 实际: ${verifyAttachments.length}`, verifyAttachments);
                     failedCount++;
+                    setProgress(prev => ({ ...prev, failed: failedCount }));
                   }
                 } else {
                   addLog('error', `⚠ 附件字段为空，设置可能失败`);
                   failedCount++;
+                  setProgress(prev => ({ ...prev, failed: failedCount }));
                 }
               } else {
                 // 如果验证返回null或非数组，可能是字段为空（新设置）
@@ -479,10 +489,12 @@ export default function App() {
                 if (overwrite) {
                   addLog('error', `⚠ 覆盖模式但附件字段为空，设置可能失败`);
                   failedCount++;
+                  setProgress(prev => ({ ...prev, failed: failedCount }));
                 } else {
                   // 追加模式，如果验证失败，但API调用成功，仍然认为可能成功
                   addLog('warn', `⚠ 无法验证附件，但API调用未报错，标记为成功`);
                   successCount++;
+                  setProgress(prev => ({ ...prev, success: successCount }));
                 }
               }
             } catch (setError: any) {
@@ -492,6 +504,7 @@ export default function App() {
                 stack: setError?.stack,
               });
               failedCount++;
+              setProgress(prev => ({ ...prev, failed: failedCount }));
             }
           } catch (error: any) {
             addLog('error', `上传附件失败: ${error?.message || String(error)}`, {
@@ -500,10 +513,12 @@ export default function App() {
               name: error?.name,
             });
             failedCount++;
+            setProgress(prev => ({ ...prev, failed: failedCount }));
           }
         } catch (error: any) {
           addLog('error', `处理记录时出错: ${error?.message || String(error)}`, error);
           failedCount++;
+          setProgress(prev => ({ ...prev, failed: failedCount }));
         }
       }
 
@@ -651,15 +666,47 @@ export default function App() {
         </Form.Checkbox>
 
         {processing && (
-          <div style={{ marginTop: '16px', textAlign: 'center' }}>
-            <Spin spinning={true} />
-            <Text style={{ display: 'block', marginTop: '8px' }}>
-              {t('processingRecord', {
-                current: progress.current,
-                total: progress.total,
-              })}
-            </Text>
-          </div>
+          <Card style={{ marginTop: '16px', backgroundColor: '#f7f8fa' }}>
+            <div style={{ textAlign: 'center', padding: '16px' }}>
+              <Spin spinning={true} size="large" />
+              <div style={{ marginTop: '16px' }}>
+                <Text strong style={{ fontSize: '16px', display: 'block', marginBottom: '8px' }}>
+                  处理进度
+                </Text>
+                <Text style={{ fontSize: '14px', color: '#575757', display: 'block', marginBottom: '12px' }}>
+                  正在处理第 <Text strong style={{ color: '#1890ff', fontSize: '16px' }}>{progress.current}</Text> 条记录，共 <Text strong style={{ color: '#1890ff', fontSize: '16px' }}>{progress.total}</Text> 条
+                </Text>
+                {progress.total > 0 && (
+                  <Progress 
+                    percent={Math.round((progress.current / progress.total) * 100)} 
+                    showInfo={true}
+                    stroke="#1890ff"
+                    style={{ marginTop: '12px' }}
+                  />
+                )}
+                <div style={{ marginTop: '12px', display: 'flex', justifyContent: 'center', gap: '24px', flexWrap: 'wrap' }}>
+                  <div>
+                    <Text type="secondary" style={{ fontSize: '12px' }}>成功</Text>
+                    <Text strong style={{ fontSize: '18px', color: '#52c41a', display: 'block', marginTop: '4px' }}>
+                      {progress.success}
+                    </Text>
+                  </div>
+                  <div>
+                    <Text type="secondary" style={{ fontSize: '12px' }}>失败</Text>
+                    <Text strong style={{ fontSize: '18px', color: '#f5222d', display: 'block', marginTop: '4px' }}>
+                      {progress.failed}
+                    </Text>
+                  </div>
+                  <div>
+                    <Text type="secondary" style={{ fontSize: '12px' }}>已完成</Text>
+                    <Text strong style={{ fontSize: '18px', color: '#1890ff', display: 'block', marginTop: '4px' }}>
+                      {progress.current} / {progress.total}
+                    </Text>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </Card>
         )}
 
         <Button
