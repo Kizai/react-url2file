@@ -533,12 +533,14 @@ export default function App() {
       // 只有在有实际处理结果时才显示通知
       if (successCount > 0 || failedCount > 0) {
         if (failedCount === 0) {
+          // 全部成功
           Notification.success({
             title: t('success'),
-            content: t('completed', { success: successCount, failed: failedCount }),
+            content: t('completedAllSuccess', { success: successCount }),
             duration: 5,
           });
         } else {
+          // 有失败记录
           Notification.warning({
             title: t('error'),
             content: t('completed', { success: successCount, failed: failedCount }),
