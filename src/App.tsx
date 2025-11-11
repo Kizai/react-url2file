@@ -597,7 +597,7 @@ export default function App() {
         <Text type="secondary" style={{ fontSize: '12px', marginTop: '-8px', marginBottom: '8px', display: 'block' }}>
           {t('authCodeHelp')}{' '}
           <a
-            href="https://eggreeco.feishu.cn/wiki/DKmzw5ASKi2"
+            href="https://feishu.feishu.cn/docx/Samyd47njoe46wx6cgWcDIywnZZ"
             target="_blank"
             rel="noopener noreferrer"
             style={{ color: 'var(--semi-color-link)' }}
@@ -752,66 +752,83 @@ export default function App() {
             </div>
           }
         >
-          <div
-            ref={logContainerRef}
-            className="log-container"
-            style={{
-              maxHeight: '400px',
-              overflowY: 'auto',
-              fontFamily: 'monospace',
-              fontSize: '12px',
-              lineHeight: '1.6',
-              padding: '12px',
-              backgroundColor: '#1e1e1e',
-              color: '#d4d4d4',
-              borderRadius: '4px',
-            }}
-          >
-            {logs.length === 0 ? (
-              <div style={{ color: '#888' }}>{t('noLogs')}</div>
-            ) : (
-              logs.map((log) => {
-                const time = new Date(log.timestamp).toLocaleTimeString();
-                const levelColor = 
-                  log.level === 'error' ? '#f48771' :
-                  log.level === 'warn' ? '#dcdcaa' :
-                  log.level === 'success' ? '#4ec9b0' :
-                  '#569cd6';
-                
-                return (
-                  <div
-                    key={log.id}
-                    style={{
-                      marginBottom: '4px',
-                      padding: '2px 0',
-                      borderLeft: `3px solid ${levelColor}`,
-                      paddingLeft: '8px',
-                    }}
-                  >
-                    <span style={{ color: '#808080' }}>[{time}]</span>{' '}
-                    <span style={{ color: levelColor, fontWeight: 'bold' }}>
-                      [{log.level.toUpperCase()}]
-                    </span>{' '}
-                    <span style={{ color: '#d4d4d4' }}>{log.message}</span>
-                    {log.data !== undefined && (
-                      <pre
-                        style={{
-                          margin: '4px 0 0 0',
-                          padding: '8px',
-                          backgroundColor: '#252526',
-                          borderRadius: '4px',
-                          overflow: 'auto',
-                          fontSize: '11px',
-                          color: '#ce9178',
-                        }}
-                      >
-                        {typeof log.data === 'object' ? JSON.stringify(log.data, null, 2) : String(log.data)}
-                      </pre>
-                    )}
-                  </div>
-                );
-              })
-            )}
+          <div>
+            <div
+              ref={logContainerRef}
+              className="log-container"
+              style={{
+                maxHeight: '360px',
+                overflowY: 'auto',
+                fontFamily: 'monospace',
+                fontSize: '12px',
+                lineHeight: '1.6',
+                padding: '12px',
+                backgroundColor: '#1e1e1e',
+                color: '#d4d4d4',
+                borderRadius: '4px 4px 0 0',
+              }}
+            >
+              {logs.length === 0 ? (
+                <div style={{ color: '#888' }}>{t('noLogs')}</div>
+              ) : (
+                logs.map((log) => {
+                  const time = new Date(log.timestamp).toLocaleTimeString();
+                  const levelColor = 
+                    log.level === 'error' ? '#f48771' :
+                    log.level === 'warn' ? '#dcdcaa' :
+                    log.level === 'success' ? '#4ec9b0' :
+                    '#569cd6';
+                  
+                  return (
+                    <div
+                      key={log.id}
+                      style={{
+                        marginBottom: '4px',
+                        padding: '2px 0',
+                        borderLeft: `3px solid ${levelColor}`,
+                        paddingLeft: '8px',
+                      }}
+                    >
+                      <span style={{ color: '#808080' }}>[{time}]</span>{' '}
+                      <span style={{ color: levelColor, fontWeight: 'bold' }}>
+                        [{log.level.toUpperCase()}]
+                      </span>{' '}
+                      <span style={{ color: '#d4d4d4' }}>{log.message}</span>
+                      {log.data !== undefined && (
+                        <pre
+                          style={{
+                            margin: '4px 0 0 0',
+                            padding: '8px',
+                            backgroundColor: '#252526',
+                            borderRadius: '4px',
+                            overflow: 'auto',
+                            fontSize: '11px',
+                            color: '#ce9178',
+                          }}
+                        >
+                          {typeof log.data === 'object' ? JSON.stringify(log.data, null, 2) : String(log.data)}
+                        </pre>
+                      )}
+                    </div>
+                  );
+                })
+              )}
+            </div>
+            {/* 版权信息 */}
+            <div
+              style={{
+                textAlign: 'center',
+                fontSize: '11px',
+                color: '#888',
+                fontFamily: 'monospace',
+                padding: '8px 12px',
+                borderTop: '1px solid #333',
+                backgroundColor: '#1e1e1e',
+                borderRadius: '0 0 4px 4px',
+              }}
+            >
+              © 2025 Designed By Kizai
+            </div>
           </div>
         </Card>
       )}
