@@ -156,11 +156,35 @@ react-url2file/
 
 ### 部署到Vercel
 
-1. 将项目推送到GitHub
-2. 在Vercel中导入项目
-3. 配置构建命令：`npm run build`
-4. 配置输出目录：`dist`
-5. 部署后获取URL，在飞书多维表格中使用该URL
+1. **登录Vercel**：访问 [Vercel](https://vercel.com) 并登录（可以使用GitHub账户）
+
+2. **导入项目**：
+   - 点击 "Add New Project"
+   - 选择 "Import Git Repository"
+   - 选择 `react-url2file` 仓库
+   - 点击 "Import"
+
+3. **配置项目**（通常Vercel会自动检测）：
+   - **Framework Preset**: Vite
+   - **Build Command**: `npm run build`
+   - **Output Directory**: `dist`
+   - **Install Command**: `npm install`
+
+4. **环境变量**：通常不需要额外配置环境变量
+
+5. **部署**：
+   - 点击 "Deploy" 按钮
+   - 等待部署完成
+
+6. **获取部署URL**：
+   - 部署完成后，Vercel会提供一个URL（例如：`https://react-url2file.vercel.app`）
+   - 在飞书多维表格的扩展脚本中使用这个URL
+
+7. **在飞书多维表格中使用**：
+   - 打开飞书多维表格
+   - 进入扩展脚本设置
+   - 输入Vercel提供的URL
+   - 保存并启用插件
 
 ## 常见问题
 
