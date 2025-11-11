@@ -27,5 +27,6 @@
   "pleaseSelectView": "Please select view",
   "pleaseSelectFields": "Please select URL field and attachment field",
   "info": "Info",
-  "noRecords": "No records found"
+  "noRecords": "No records found",
+  "noProcessableRecords": "No processable records (all records were skipped)"
 }

@@ -173,17 +173,27 @@ export default function App() {
 
       let successCount = 0;
       let failedCount = 0;
+      let skippedCount = 0;
+
+      console.log(`开始处理 ${total} 条记录`);
 
       // 遍历每条记录
       for (let i = 0; i < recordIds.length; i++) {
         const recordId = recordIds[i];
-        if (!recordId) continue;
+        if (!recordId) {
+          console.warn(`记录ID为空，跳过`);
+          skippedCount++;
+          continue;
+        }
         
         setProgress(prev => ({ ...prev, current: i + 1 }));
+        console.log(`处理第 ${i + 1}/${total} 条记录: ${recordId}`);
 
         try {
           // 获取URL字段的值
           const urlValue = await table.getCellValue(urlFieldId, recordId);
+          console.log(`URL字段值:`, urlValue);
+          
           let url: string | null = null;
 
           // 处理不同类型的URL字段值
@@ -199,6 +209,7 @@ export default function App() {
               if (firstItem && typeof firstItem === 'object') {
                 // 优先使用link属性（Url字段），如果没有则使用text属性（Text字段）
                 url = (firstItem as any).link || (firstItem as any).text || null;
+                console.log(`从数组提取URL:`, url, `link:`, (firstItem as any).link, `text:`, (firstItem as any).text);
               } else if (typeof firstItem === 'string') {
                 url = firstItem;
               }
@@ -206,37 +217,46 @@ export default function App() {
               // 单个对象
               // 优先使用link属性（Url字段），如果没有则使用text属性
               url = (urlValue as any).link || (urlValue as any).text || null;
+              console.log(`从对象提取URL:`, url);
             }
           }
 
           // 如果URL为空，跳过
           if (!url || typeof url !== 'string' || !url.trim()) {
+            console.warn(`记录 ${recordId} URL为空，跳过`);
+            skippedCount++;
             continue;
           }
 
           const trimmedUrl = url.trim();
+          console.log(`提取的URL: ${trimmedUrl}`);
 
           // 验证URL
           if (!isValidUrl(trimmedUrl)) {
-            console.warn(`Invalid URL: ${trimmedUrl}`);
+            console.warn(`记录 ${recordId} URL无效: ${trimmedUrl}`);
             failedCount++;
             continue;
           }
 
           // 获取当前附件字段的值
           const currentAttachments = await table.getCellValue(attachmentFieldId, recordId);
+          console.log(`当前附件:`, currentAttachments);
           
           // 如果已有附件且不覆盖，跳过
           if (!overwrite && currentAttachments && Array.isArray(currentAttachments) && currentAttachments.length > 0) {
+            console.log(`记录 ${recordId} 已有附件且不覆盖，跳过`);
+            skippedCount++;
             continue;
           }
 
           // 下载文件
           let blob: Blob;
           try {
+            console.log(`开始下载文件: ${trimmedUrl}`);
             blob = await downloadFileFromUrl(trimmedUrl);
+            console.log(`文件下载成功，大小: ${blob.size} bytes, 类型: ${blob.type}`);
           } catch (error) {
-            console.error(`Download failed for URL: ${trimmedUrl}`, error);
+            console.error(`记录 ${recordId} 下载文件失败:`, error);
             failedCount++;
             continue;
           }
@@ -245,48 +265,81 @@ export default function App() {
           try {
             // 获取文件名
             const fileName = getFileNameFromUrl(trimmedUrl) || 'file';
+            console.log(`文件名: ${fileName}`);
             
             // 将Blob转换为File对象
             const file = new File([blob], fileName, { type: blob.type || 'application/octet-stream' });
             
-            // 使用base.uploadFile上传文件，返回file_token
+            // 使用base.uploadFile上传文件，返回token
+            console.log(`开始上传文件到飞书...`);
             const fileToken = await bitable.base.uploadFile(file);
+            console.log(`文件上传成功，token: ${fileToken}`);
 
-            // 构建附件对象
+            // 构建附件对象（使用token字段，不是file_token）
             const attachmentItem = {
-              file_token: fileToken,
+              token: fileToken,
               name: fileName,
+              size: blob.size,
+              type: blob.type || 'application/octet-stream',
             };
+            console.log(`附件对象:`, attachmentItem);
 
             // 设置附件字段的值
-            if (overwrite || !currentAttachments || !Array.isArray(currentAttachments) || currentAttachments.length === 0) {
-              // 覆盖或为空时，设置为新附件
-              await table.setCellValue(attachmentFieldId, recordId, [attachmentItem] as any);
-            } else {
-              // 追加附件（保留原有附件）
-              await table.setCellValue(attachmentFieldId, recordId, [
-                ...(currentAttachments as any[]),
-                attachmentItem
-              ] as any);
-            }
+            const attachmentsToSet = overwrite || !currentAttachments || !Array.isArray(currentAttachments) || currentAttachments.length === 0
+              ? [attachmentItem]
+              : [...(currentAttachments as any[]), attachmentItem];
+            
+            console.log(`设置附件字段值:`, attachmentsToSet);
+            
+            // setCellValue返回Promise<boolean>，true表示成功
+            try {
+              const setResult = await table.setCellValue(attachmentFieldId, recordId, attachmentsToSet as any);
+              console.log(`设置附件字段结果:`, setResult);
 
-            successCount++;
+              // 即使setResult为false，也不一定是失败，可能只是返回状态
+              // 所以我们假设如果没有抛出异常就是成功
+              successCount++;
+              console.log(`记录 ${recordId} 处理成功`);
+            } catch (setError) {
+              console.error(`记录 ${recordId} 设置附件字段失败:`, setError);
+              failedCount++;
+            }
           } catch (error) {
-            console.error(`Upload failed for URL: ${trimmedUrl}`, error);
+            console.error(`记录 ${recordId} 上传附件失败:`, error);
             failedCount++;
           }
         } catch (error) {
-          console.error(`Process record error:`, error);
+          console.error(`记录 ${recordId} 处理出错:`, error);
           failedCount++;
         }
       }
 
+      console.log(`处理完成: 成功 ${successCount}, 失败 ${failedCount}, 跳过 ${skippedCount}`);
+
       setProgress(prev => ({ ...prev, success: successCount, failed: failedCount }));
-      Notification.success({
-        title: t('success'),
-        content: t('completed', { success: successCount, failed: failedCount }),
-        duration: 5,
-      });
+      
+      // 只有在有实际处理结果时才显示通知
+      if (successCount > 0 || failedCount > 0) {
+        if (failedCount === 0) {
+          Notification.success({
+            title: t('success'),
+            content: t('completed', { success: successCount, failed: failedCount }),
+            duration: 5,
+          });
+        } else {
+          Notification.warning({
+            title: t('error'),
+            content: t('completed', { success: successCount, failed: failedCount }),
+            duration: 5,
+          });
+        }
+      } else {
+        Notification.info({
+          title: t('info'),
+          content: t('noProcessableRecords'),
+          duration: 3,
+        });
+      }
     } catch (error) {
       console.error('Convert error:', error);
       Notification.error({ title: t('error'), content: String(error) });

@@ -27,5 +27,6 @@
   "pleaseSelectView": "请选择视图",
   "pleaseSelectFields": "请选择URL字段和附件字段",
   "info": "提示",
-  "noRecords": "没有找到记录"
+  "noRecords": "没有找到记录",
+  "noProcessableRecords": "没有可处理的记录（所有记录都被跳过）"
 }
