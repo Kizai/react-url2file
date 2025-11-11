@@ -1,14 +1,21 @@
 {
-  "name": "react-emplate",
+  "name": "react-url2file",
   "version": "1.0.0",
   "type": "module",
-  "description": "React TypeScript on Replit, using Vite bundler",
+  "description": "飞书多维表格插件 - URL转附件工具",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview"
   },
-  "keywords": [],
+  "keywords": [
+    "feishu",
+    "bitable",
+    "lark",
+    "url-to-file",
+    "attachment",
+    "plugin"
+  ],
   "output": "dist",
   "author": "",
   "license": "ISC",
