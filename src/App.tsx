@@ -78,9 +78,11 @@ export default function App() {
       
       setViewMetaList(views);
       
-      // 过滤URL字段（文本字段）和附件字段
-      // FieldType.Text = 1, FieldType.Attachment = 17
-      const urlFields = fields.filter(f => f.type === FieldType.Text);
+      // 过滤URL字段（文本字段和URL字段）和附件字段
+      // FieldType.Text = 1, FieldType.Url = 15, FieldType.Attachment = 17
+      const urlFields = fields.filter(f => 
+        f.type === FieldType.Text || f.type === FieldType.Url
+      );
       const attachmentFields = fields.filter(f => f.type === FieldType.Attachment);
       
       setUrlFieldList(urlFields);
@@ -185,24 +187,25 @@ export default function App() {
           let url: string | null = null;
 
           // 处理不同类型的URL字段值
+          // Url字段类型返回的是ISegmentItem[]，其中包含link属性
+          // Text字段类型返回的可能是string或ISegmentItem[]
           if (urlValue) {
             if (typeof urlValue === 'string') {
+              // 纯字符串类型
               url = urlValue;
             } else if (Array.isArray(urlValue) && urlValue.length > 0) {
-              // 文本字段可能是数组形式（ISegmentItem[]）
+              // 数组类型（ISegmentItem[]），Url字段和Text字段都可能是这种格式
               const firstItem = urlValue[0];
-              if (firstItem && typeof firstItem === 'object' && 'text' in firstItem) {
-                url = (firstItem as any).text;
+              if (firstItem && typeof firstItem === 'object') {
+                // 优先使用link属性（Url字段），如果没有则使用text属性（Text字段）
+                url = (firstItem as any).link || (firstItem as any).text || null;
               } else if (typeof firstItem === 'string') {
                 url = firstItem;
               }
             } else if (urlValue && typeof urlValue === 'object') {
               // 单个对象
-              if ('text' in urlValue) {
-                url = (urlValue as any).text;
-              } else if ('link' in urlValue) {
-                url = (urlValue as any).link;
-              }
+              // 优先使用link属性（Url字段），如果没有则使用text属性
+              url = (urlValue as any).link || (urlValue as any).text || null;
             }
           }
 

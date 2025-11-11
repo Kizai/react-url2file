@@ -74,9 +74,10 @@ npm run build
 
 ### URL字段
 
-- 支持文本类型的字段
+- 支持文本类型（Text）和URL类型（Url）的字段
 - URL必须是有效的HTTP或HTTPS链接
 - 如果URL为空或无效，将跳过该记录
+- 对于Url类型的字段，会优先读取link属性；对于Text类型的字段，会读取text属性
 
 ### 附件字段
 
