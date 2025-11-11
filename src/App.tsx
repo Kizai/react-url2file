@@ -269,43 +269,130 @@ export default function App() {
             
             // 将Blob转换为File对象
             const file = new File([blob], fileName, { type: blob.type || 'application/octet-stream' });
+            console.log(`File对象创建成功:`, { name: file.name, size: file.size, type: file.type });
             
-            // 使用base.uploadFile上传文件，返回token
+            // 获取附件字段实例
+            const attachmentField = await table.getFieldById(attachmentFieldId) as IAttachmentField;
+            console.log(`附件字段获取成功:`, attachmentFieldId);
+            
+            // 方法1: 使用batchUploadFile上传文件，然后设置附件值
             console.log(`开始上传文件到飞书...`);
-            const fileToken = await bitable.base.uploadFile(file);
-            console.log(`文件上传成功，token: ${fileToken}`);
-
-            // 构建附件对象（使用token字段，不是file_token）
-            const attachmentItem = {
+            const fileTokens = await bitable.base.batchUploadFile([file]);
+            console.log(`文件上传成功，tokens:`, fileTokens);
+            
+            if (!fileTokens || fileTokens.length === 0) {
+              throw new Error('文件上传失败，未返回token');
+            }
+            
+            const fileToken = fileTokens[0];
+            
+            // 构建附件对象（根据IOpenAttachment类型定义）
+            // IOpenAttachment需要: token, name, size, type, timeStamp
+            const attachmentItem: any = {
               token: fileToken,
               name: fileName,
               size: blob.size,
               type: blob.type || 'application/octet-stream',
+              timeStamp: Date.now(), // 添加时间戳
             };
             console.log(`附件对象:`, attachmentItem);
 
-            // 设置附件字段的值
-            const attachmentsToSet = overwrite || !currentAttachments || !Array.isArray(currentAttachments) || currentAttachments.length === 0
-              ? [attachmentItem]
-              : [...(currentAttachments as any[]), attachmentItem];
+            // 准备要设置的附件数组
+            let attachmentsToSet: any[];
+            if (overwrite || !currentAttachments || !Array.isArray(currentAttachments) || currentAttachments.length === 0) {
+              // 覆盖或为空时，设置为新附件
+              attachmentsToSet = [attachmentItem];
+              console.log(`使用覆盖模式，设置新附件`);
+            } else {
+              // 追加附件（保留原有附件）
+              // 确保现有附件对象格式正确
+              const normalizedExisting = (currentAttachments as any[]).map((att: any) => {
+                // 如果现有附件对象缺少必要字段，尝试规范化
+                if (att && typeof att === 'object' && att.token) {
+                  return {
+                    token: att.token,
+                    name: att.name || 'file',
+                    size: att.size || 0,
+                    type: att.type || 'application/octet-stream',
+                    timeStamp: att.timeStamp || Date.now(),
+                  };
+                }
+                return att;
+              });
+              attachmentsToSet = [...normalizedExisting, attachmentItem];
+              console.log(`使用追加模式，保留 ${normalizedExisting.length} 个现有附件，添加新附件`);
+            }
             
-            console.log(`设置附件字段值:`, attachmentsToSet);
+            console.log(`准备设置附件字段值（共 ${attachmentsToSet.length} 个附件）:`, attachmentsToSet);
             
-            // setCellValue返回Promise<boolean>，true表示成功
+            // 使用setCellValue设置附件字段的值
             try {
-              const setResult = await table.setCellValue(attachmentFieldId, recordId, attachmentsToSet as any);
-              console.log(`设置附件字段结果:`, setResult);
-
-              // 即使setResult为false，也不一定是失败，可能只是返回状态
-              // 所以我们假设如果没有抛出异常就是成功
-              successCount++;
-              console.log(`记录 ${recordId} 处理成功`);
-            } catch (setError) {
-              console.error(`记录 ${recordId} 设置附件字段失败:`, setError);
+              const setResult = await table.setCellValue(attachmentFieldId, recordId, attachmentsToSet);
+              console.log(`设置附件字段API调用完成，返回值:`, setResult);
+              
+              // 短暂等待，让服务器处理
+              await new Promise(resolve => setTimeout(resolve, 1000));
+              
+              // 验证设置是否成功 - 重新读取附件字段值
+              const verifyAttachments = await table.getCellValue(attachmentFieldId, recordId);
+              console.log(`验证附件字段值:`, verifyAttachments);
+              
+              // 检查是否设置成功
+              if (verifyAttachments && Array.isArray(verifyAttachments)) {
+                // 检查新附件是否在列表中
+                const hasNewAttachment = verifyAttachments.some((att: any) => 
+                  att && att.token === fileToken
+                );
+                
+                if (hasNewAttachment) {
+                  successCount++;
+                  console.log(`✓ 记录 ${recordId} 处理成功，附件已确认设置`);
+                } else if (verifyAttachments.length > 0) {
+                  // 如果附件列表不为空，但找不到新附件，可能是token不匹配
+                  // 检查是否有新添加的附件（通过数量判断）
+                  const existingCount = (currentAttachments && Array.isArray(currentAttachments)) 
+                    ? currentAttachments.length 
+                    : 0;
+                  const expectedCount = overwrite ? 1 : existingCount + 1;
+                  if (verifyAttachments.length >= expectedCount) {
+                    successCount++;
+                    console.log(`✓ 记录 ${recordId} 处理成功，附件数量正确（${verifyAttachments.length}个）`);
+                  } else {
+                    console.warn(`⚠ 记录 ${recordId} 附件数量不匹配，期望 ${expectedCount}，实际 ${verifyAttachments.length}`);
+                    failedCount++;
+                  }
+                } else {
+                  console.warn(`⚠ 记录 ${recordId} 附件字段为空，设置可能失败`);
+                  failedCount++;
+                }
+              } else {
+                // 如果验证返回null或非数组，可能是字段为空（新设置）
+                // 但在覆盖模式下，应该至少有一个附件
+                if (overwrite) {
+                  console.warn(`⚠ 记录 ${recordId} 覆盖模式但附件字段为空`);
+                  failedCount++;
+                } else {
+                  // 追加模式，如果验证失败，但API调用成功，仍然认为可能成功
+                  console.log(`⚠ 记录 ${recordId} 无法验证，但API调用未报错，标记为成功`);
+                  successCount++;
+                }
+              }
+            } catch (setError: any) {
+              console.error(`❌ 记录 ${recordId} 设置附件字段时抛出异常:`, setError);
+              console.error(`异常详情:`, {
+                message: setError?.message,
+                name: setError?.name,
+                stack: setError?.stack,
+              });
               failedCount++;
             }
-          } catch (error) {
+          } catch (error: any) {
             console.error(`记录 ${recordId} 上传附件失败:`, error);
+            console.error(`错误详情:`, {
+              message: error?.message,
+              stack: error?.stack,
+              name: error?.name,
+            });
             failedCount++;
           }
         } catch (error) {
