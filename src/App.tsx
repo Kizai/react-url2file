@@ -316,13 +316,51 @@ export default function App() {
           }
 
           // 下载文件
-          let blob: Blob;
+          let blob: Blob | null = null;
           try {
             addLog('info', `开始下载文件: ${trimmedUrl}`);
-            blob = await downloadFileFromUrl(trimmedUrl);
+            addLog('info', `首先尝试通过代理下载（解决CORS问题）`);
+            
+            // 获取代理URL
+            const baseUrl = window.location.origin;
+            const proxyUrl = `${baseUrl}/api/proxy?url=${encodeURIComponent(trimmedUrl)}`;
+            addLog('info', `代理URL: ${proxyUrl}`);
+            
+            // 使用代理下载，并传入日志回调
+            blob = await downloadFileFromUrl(trimmedUrl, true, addLog);
             addLog('success', `文件下载成功 - 大小: ${(blob.size / 1024).toFixed(2)} KB, 类型: ${blob.type || 'unknown'}`);
           } catch (error: any) {
-            addLog('error', `下载文件失败: ${error?.message || String(error)}`, error);
+            addLog('error', `下载文件失败: ${error?.message || String(error)}`);
+            if (error?.data) {
+              addLog('error', `错误详情:`, error.data);
+            }
+            
+            // 分析错误类型
+            const errorMsg = error?.message || String(error);
+            if (errorMsg.includes('500') || errorMsg.includes('HTTP错误') || errorMsg.includes('服务器错误')) {
+              addLog('error', `目标服务器返回错误（可能是服务器问题，不是CORS问题）`);
+              addLog('error', `如果目标服务器返回500错误，说明文件服务器有问题，无法下载`);
+              failedCount++;
+              continue;
+            } else if (errorMsg.includes('CORS') || errorMsg.includes('代理')) {
+              addLog('info', `CORS或代理问题，尝试直接下载（可能仍然失败）`);
+              try {
+                blob = await downloadFileFromUrl(trimmedUrl, false, addLog); // 不使用代理
+                addLog('success', `直接下载成功 - 大小: ${(blob.size / 1024).toFixed(2)} KB`);
+              } catch (directError: any) {
+                addLog('error', `直接下载也失败: ${directError?.message || String(directError)}`);
+                failedCount++;
+                continue;
+              }
+            } else {
+              failedCount++;
+              continue;
+            }
+          }
+
+          // 检查blob是否成功下载
+          if (!blob) {
+            addLog('error', `文件下载失败，blob为空`);
             failedCount++;
             continue;
           }
