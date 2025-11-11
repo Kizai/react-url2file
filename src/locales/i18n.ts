@@ -22,6 +22,8 @@ i18n
     fallbackLng: 'en', // 指定降级文案为英文
     interpolation: {
       escapeValue: false,
+      // 使用默认的插值格式 {{variable}}
+      // 也可以使用单大括号，但需要配置 prefix: '{', suffix: '}'
     },
   });
 

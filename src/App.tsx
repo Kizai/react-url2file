@@ -533,17 +533,17 @@ export default function App() {
       // 只有在有实际处理结果时才显示通知
       if (successCount > 0 || failedCount > 0) {
         if (failedCount === 0) {
-          // 全部成功
+          // 全部成功 - 使用模板字符串确保变量替换
           Notification.success({
             title: t('success'),
-            content: t('completedAllSuccess', { success: successCount }),
+            content: `已成功处理 ${successCount} 条记录`,
             duration: 5,
           });
         } else {
-          // 有失败记录
+          // 有失败记录 - 使用模板字符串确保变量替换
           Notification.warning({
             title: t('error'),
-            content: t('completed', { success: successCount, failed: failedCount }),
+            content: `已完成 ${successCount} 条记录，失败 ${failedCount} 条`,
             duration: 5,
           });
         }
