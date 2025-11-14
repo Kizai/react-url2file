@@ -126,10 +126,10 @@ export default function App() {
       
       setViewMetaList(views);
       
-      // 过滤URL字段（文本字段和URL字段）和附件字段
-      // FieldType.Text = 1, FieldType.Url = 15, FieldType.Attachment = 17
+      // 过滤URL字段（文本字段、URL字段和公式字段）和附件字段
+      // FieldType.Text = 1, FieldType.Url = 15, FieldType.Formula = 20, FieldType.Attachment = 17
       const urlFields = fields.filter(f => 
-        f.type === FieldType.Text || f.type === FieldType.Url
+        f.type === FieldType.Text || f.type === FieldType.Url || f.type === FieldType.Formula
       );
       const attachmentFields = fields.filter(f => f.type === FieldType.Attachment);
       
@@ -265,26 +265,36 @@ export default function App() {
           // 处理不同类型的URL字段值
           // Url字段类型返回的是ISegmentItem[]，其中包含link属性
           // Text字段类型返回的可能是string或ISegmentItem[]
+          // Formula字段类型返回的可能是string、number、ISegment[]或number[]
           if (urlValue) {
             if (typeof urlValue === 'string') {
-              // 纯字符串类型
+              // 纯字符串类型（Text字段或Formula字段返回字符串）
               url = urlValue;
               addLog('info', `URL类型: 字符串, 值: ${url}`);
+            } else if (typeof urlValue === 'number') {
+              // 数字类型（Formula字段可能返回数字，需要转换为字符串）
+              url = String(urlValue);
+              addLog('info', `URL类型: 数字, 值: ${url}`);
             } else if (Array.isArray(urlValue) && urlValue.length > 0) {
-              // 数组类型（ISegmentItem[]），Url字段和Text字段都可能是这种格式
+              // 数组类型（ISegmentItem[]或number[]），Url字段、Text字段和Formula字段都可能是这种格式
               const firstItem = urlValue[0];
               addLog('info', `URL类型: 数组, 第一项:`, firstItem);
               if (firstItem && typeof firstItem === 'object') {
-                // 优先使用link属性（Url字段），如果没有则使用text属性（Text字段）
+                // ISegmentItem对象，优先使用link属性（Url字段），如果没有则使用text属性（Text/Formula字段）
                 url = (firstItem as any).link || (firstItem as any).text || null;
                 addLog('info', `从数组提取URL - link: ${(firstItem as any).link}, text: ${(firstItem as any).text}, 最终URL: ${url}`);
               } else if (typeof firstItem === 'string') {
+                // 字符串数组
                 url = firstItem;
                 addLog('info', `从数组提取URL (字符串): ${url}`);
+              } else if (typeof firstItem === 'number') {
+                // 数字数组（Formula字段可能返回）
+                url = String(firstItem);
+                addLog('info', `从数组提取URL (数字): ${url}`);
               }
             } else if (urlValue && typeof urlValue === 'object') {
               // 单个对象
-              // 优先使用link属性（Url字段），如果没有则使用text属性
+              // 优先使用link属性（Url字段），如果没有则使用text属性（Text/Formula字段）
               url = (urlValue as any).link || (urlValue as any).text || null;
               addLog('info', `从对象提取URL，最终URL: ${url}`, urlValue);
             }
